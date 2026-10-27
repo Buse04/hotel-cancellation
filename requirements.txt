@@ -1,0 +1,27 @@
+# Veri ve analiz
+numpy
+pandas
+scipy
+
+# Görselleştirme
+matplotlib
+seaborn
+
+# Klasik modeller (Logistic Regression, Random Forest, Decision Tree...)
+scikit-learn
+
+# Boosting
+xgboost
+lightgbm
+catboost
+
+# Deep learning
+tensorflow
+pytorch-tabnet
+
+# Yorumlama
+shap
+
+# Notebook
+jupyter
+ipykernel
