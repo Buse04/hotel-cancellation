@@ -6,3 +6,6 @@ __pycache__/
 .venv/
 to-do.txt
 .gitignore
+.idea/
+notebooks/preprocessing_eda.ipynb
+
