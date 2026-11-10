@@ -7,6 +7,15 @@ if __package__:
 else:
     from data_loader import load_hotel_bookings
 
+NUMERIC_COLUMNS = (
+    "is_canceled", "lead_time", "arrival_date_year", "arrival_date_week_number",
+    "arrival_date_day_of_month", "stays_in_weekend_nights", "stays_in_week_nights",
+    "adults", "children", "babies", "is_repeated_guest", "previous_cancellations",
+    "previous_bookings_not_canceled", "booking_changes", "days_in_waiting_list",
+    "adr", "required_car_parking_spaces", "total_of_special_requests",
+)
+
+MISSING_TOKENS = ["", "null", "na", "n/a", "nan"]
 
 def remove_leakage_columns(bookings: pd.DataFrame) -> pd.DataFrame:
     """Exclude reservation outcome and outcome-date columns."""
@@ -30,44 +39,45 @@ def normalize_text_columns(bookings: pd.DataFrame) -> pd.DataFrame:
         )
     return bookings
 
-
-def check_negative_values(bookings: pd.DataFrame) -> pd.DataFrame:
-    """Replace negative values in selected columns with pd.NA, preserving rows and types."""
-    nonnegative_columns = (
-        "stays_in_weekend_nights", "stays_in_week_nights", "adults", "children",
-        "babies", "is_repeated_guest", "previous_cancellations",
-        "previous_bookings_not_canceled", "days_in_waiting_list",
-        "required_car_parking_spaces", "total_of_special_requests", "adr",
-    )
-    for column in nonnegative_columns:
-        numeric_values = pd.to_numeric(bookings[column], errors="coerce")
-        negative_values = numeric_values.lt(0).fillna(False)
-        bookings[column] = bookings[column].mask(negative_values, pd.NA)
+def convert_types(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Convert numeric columns from text to numbers."""
+    for column in NUMERIC_COLUMNS:
+        values = bookings[column].replace(MISSING_TOKENS, pd.NA)
+        bookings[column] = pd.to_numeric(values, errors="raise")
     return bookings
+
+def remove_invalid_rows(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Remove invalid rows from bookings."""
+    total_nights = bookings["stays_in_weekend_nights"] + bookings["stays_in_week_nights"]
+
+    invalid = (
+        (bookings["adults"] == 0)
+        | (total_nights == 0)
+        | (bookings["adr"] <= 0)
+        | (bookings["adr"] > 1000)
+        | (bookings["babies"] >= 9)
+        | (bookings["children"] >= 10)
+        | (bookings["required_car_parking_spaces"] >= 8)
+    )
+    invalid = invalid.fillna(False)
+    return bookings.loc[~invalid]
 
 
 def handle_num_missing_values(bookings: pd.DataFrame) -> pd.DataFrame:
-    """Fill missing ADR and children values with column medians, preserving string types."""
-    for column in ("adr", "children"):
-        numeric_values = pd.to_numeric(bookings[column], errors="coerce")
-        median_value = numeric_values.median()
-        if pd.isna(median_value):
-            continue
-        # The loader returns strings; convert only the fill value back to that type.
-        fill_value = (
-            str(median_value)
-            if isinstance(bookings[column].dtype, pd.StringDtype)
-            else median_value
-        )
-        bookings[column] = bookings[column].mask(numeric_values.isna(), fill_value)
+    """Fill the few missing children counts with 0 (no children)."""
+    bookings["children"] = bookings["children"].fillna(0)
     return bookings
 
 
 def handle_cat_missing_values(bookings: pd.DataFrame) -> pd.DataFrame:
-    """Fill missing company, country and agent values with the unknown category."""
-    missing_tokens = ["", "null", "na", "n/a", "nan"]
-    for column in ("company", "country", "agent"):
-        bookings[column] = bookings[column].replace(missing_tokens, pd.NA).fillna("unknown")
+    """Fill missing categorical values."""
+    for column in ("agent", "company"):
+        bookings[column] = (
+            bookings[column].replace(MISSING_TOKENS, pd.NA).fillna("none")
+        )
+    bookings["country"] = (
+        bookings["country"].replace(MISSING_TOKENS, pd.NA).fillna("unknown")
+    )
     return bookings
 
 
@@ -78,7 +88,8 @@ def main() -> pd.DataFrame:
     booking_copy = remove_leakage_columns(booking_copy)
     booking_copy = remove_duplicate_rows(booking_copy)
     booking_copy = normalize_text_columns(booking_copy)
-    booking_copy = check_negative_values(booking_copy)
+    booking_copy = convert_types(booking_copy)
+    booking_copy = remove_invalid_rows(booking_copy)
     booking_copy = handle_num_missing_values(booking_copy)
     booking_copy = handle_cat_missing_values(booking_copy)
     return booking_copy
