@@ -80,6 +80,49 @@ def handle_cat_missing_values(bookings: pd.DataFrame) -> pd.DataFrame:
     )
     return bookings
 
+MONTHS = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5,
+    "june": 6, "july": 7, "august": 8, "september": 9, "october": 10,
+    "november": 11, "december": 12
+}
+
+def add_features(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Add new features derived from existing columns."""
+    bookings["total_nights"] = bookings["stays_in_weekend_nights"] + bookings["stays_in_week_nights"]
+    bookings["total_guests"] = bookings["adults"] + bookings["children"] + bookings["babies"]
+
+    arrival_date = pd.to_datetime(dict(
+        year=bookings["arrival_date_year"],
+        month=bookings["arrival_date_month"].map(MONTHS),
+        day=bookings["arrival_date_day_of_month"],
+    ))
+    bookings["arrival_weekday"] = arrival_date.dt.day_name().str.lower()
+    return bookings
+
+UNUSED_COLUMNS = ["arrival_date_week_number", "arrival_date_day_of_month"]
+
+def drop_unused_columns(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Drop unused columns."""
+    return bookings.drop(columns=UNUSED_COLUMNS)
+
+NONNEGATIVE_COLUMNS = ["stays_in_weekend_nights", "stays_in_week_nights", "adults", "children",
+    "babies", "is_repeated_guest", "previous_cancellations",
+    "previous_bookings_not_canceled", "days_in_waiting_list",
+    "required_car_parking_spaces", "total_of_special_requests", "adr",]
+
+def validate_bookings(bookings: pd.DataFrame) -> pd.DataFrame:
+    """Check that the cleaned data meets the expected rules; raise an error if not.
+
+    Runs before drop_unused_columns: removing the date columns makes some
+    different bookings look identical, which would fail the duplicate check.
+    """
+    assert bookings.isna().sum().sum() == 0, "Missing values remain"
+    assert not bookings.duplicated().any(), "Duplicate rows remain"
+    assert (bookings[NONNEGATIVE_COLUMNS] >= 0).all().all(), "Negative values found"
+    assert (bookings["adults"] > 0).all(), "Bookings without adults remain"
+    assert bookings["is_canceled"].isin([0, 1]).all(), "Target must be 0 or 1"
+    return bookings
+
 
 def main() -> pd.DataFrame:
     """Load raw bookings and apply the ordered steps to an independent copy."""
@@ -92,6 +135,9 @@ def main() -> pd.DataFrame:
     booking_copy = remove_invalid_rows(booking_copy)
     booking_copy = handle_num_missing_values(booking_copy)
     booking_copy = handle_cat_missing_values(booking_copy)
+    booking_copy = add_features(booking_copy)
+    booking_copy = validate_bookings(booking_copy)
+    booking_copy = drop_unused_columns(booking_copy)
     return booking_copy
 
 
