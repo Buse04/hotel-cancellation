@@ -7,3 +7,5 @@ __pycache__/
 to-do.txt
 .gitignore
 .idea/
+notebooks/preprocessing_eda.ipynb
+
