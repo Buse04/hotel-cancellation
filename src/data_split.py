@@ -12,6 +12,7 @@ if __package__:
 else:
     from preprocessing import main as preprocess_bookings
 
+NON_FEATURE_COLUMNS = ["is_canceled", "arrival_date_year"]
 
 def random_split(
     bookings: pd.DataFrame,
@@ -53,6 +54,17 @@ def temporal_split(
         raise ValueError("Temporal train and test sets must both contain bookings.")
     return train, test
 
+def split_features_target(
+        dataset: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Return model inputs X and target y for one split dataframe.
+
+        X excludes the target and arrival_date_year, so the year can never
+        be given to a model by accident.
+    """
+    X = dataset.drop(columns=NON_FEATURE_COLUMNS)
+    y = dataset["is_canceled"]
+    return X, y
 
 def main() -> dict[str, dict[str, pd.DataFrame]]:
     """Preprocess once and create both experiments from the same booking copy."""
